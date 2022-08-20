@@ -15,6 +15,8 @@
 //      The player 'X' win
 
 const std = @import("std");
+const Proc = std.ChildProcess;
+const tags = @import("builtin").os.tag;
 const print = std.debug.print;
 
 /// print the board on the screen
@@ -35,6 +37,21 @@ pub fn show(board: [3][3]u8) void {
         board[1][0], board[1][1], board[1][2],
         board[2][0], board[2][1], board[2][2],
     });
+}
+
+/// clear the screen
+pub fn clear(allocator: std.mem.Allocator) void {
+    comptime var cmd = if (tags == .windows) "cls" else "clear";
+
+    const proc = Proc.init(&[_][]const u8{cmd}, allocator) catch {
+        print("couldn't init the clear process\n", .{});
+        return;
+    };
+
+    _ = proc.spawnAndWait() catch {
+        print("could't clear the screen...\n", .{});
+        return;
+    };
 }
 
 /// check columns, lines and diagonales
@@ -138,10 +155,16 @@ pub fn main() void {
     // init players
     var players = [2]u8{ 'X', 'O' };
 
+    // init allocator
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
     // main loop
     var round: u8 = 0;
     var winner: bool = false;
     while (winner == false) : (round += 1) {
+        clear(allocator);
         show(board);
         play(players[round % 2], &board);
         winner = check_winner(board);
@@ -149,6 +172,7 @@ pub fn main() void {
     }
 
     // show winner if any
+    clear(allocator);
     show(board);
     if (winner) {
         print("Player {c} WIN !!!\n", .{players[(round - 1) % 2]});
