@@ -1,182 +1,90 @@
-// Program:     tictactoe
-// Made by:     4zv4l
-// Description:
-//      Basic tictactoe game
-//      User as to put 3 'O' or 'X' in a row
-//      For ex:
-//          +---+---+---+
-//          | O | 2 | X |
-//          +---+---+---+
-//          | 0 | X | 6 |
-//          +---+---+---+
-//          | X | 8 | 9 |
-//          +---+---+---+
-//
-//      The player 'X' win
-
 const std = @import("std");
-const Proc = std.ChildProcess;
-const tags = @import("builtin").os.tag;
 const print = std.debug.print;
 
-/// print the board on the screen
-pub fn show(board: [3][3]u8) void {
-    print(
-        \\
+// try to read a u8 from user input
+fn readUInt() !u8 {
+    var stdin = std.io.getStdIn().reader();
+    var buff: [5]u8 = undefined;
+    const len = try stdin.read(&buff);
+    if (len == buff.len and buff[len - 1] != '\n') {
+        while (try stdin.readByte() != '\n') {}
+        return error.InputTooLong;
+    }
+    return try std.fmt.parseUnsigned(u8, buff[0 .. len - 1], 10);
+}
+
+// check if there is a winner horizontally, vertically or diagonally
+fn winner(board: [9]u8) bool {
+    return board[0] == board[1] and board[1] == board[2] or
+        board[3] == board[4] and board[4] == board[5] or
+        board[6] == board[7] and board[7] == board[8] or
+        board[0] == board[3] and board[3] == board[6] or
+        board[1] == board[4] and board[4] == board[7] or
+        board[2] == board[5] and board[5] == board[8] or
+        board[0] == board[4] and board[4] == board[8] or
+        board[2] == board[4] and board[4] == board[6];
+}
+
+// draw the board and clear the screen using ANSI escape sequence
+fn draw(board: [9]u8) void {
+    print("\x1bc" ++
         \\+---+---+---+
         \\| {c} | {c} | {c} |
-        \\+---+---+---+ 
+        \\+---+---+---+
         \\| {c} | {c} | {c} |
-        \\+---+---+---+ 
+        \\+---+---+---+
         \\| {c} | {c} | {c} |
         \\+---+---+---+
         \\
         \\
     , .{
-        board[0][0], board[0][1], board[0][2],
-        board[1][0], board[1][1], board[1][2],
-        board[2][0], board[2][1], board[2][2],
+        board[0], board[1], board[2],
+        board[3], board[4], board[5],
+        board[6], board[7], board[8],
     });
 }
 
-/// clear the screen
-pub fn clear(allocator: std.mem.Allocator) void {
-    comptime var cmd = if (tags == .windows) "cls" else "clear";
-
-    const proc = Proc.init(&[_][]const u8{cmd}, allocator) catch {
-        print("couldn't init the clear process\n", .{});
-        return;
-    };
-
-    _ = proc.spawnAndWait() catch {
-        print("could't clear the screen...\n", .{});
-        return;
-    };
-}
-
-/// check columns, lines and diagonales
-pub fn check_winner(board: [3][3]u8) bool {
-    const X: u16 = 'X' * 3;
-    const O: u16 = 'O' * 3;
-
-    // check lines
-    var l1: u16 = @as(u16, board[0][0]) + @as(u16, board[0][1]) + @as(u16, board[0][2]);
-    var l2: u16 = @as(u16, board[1][0]) + @as(u16, board[1][1]) + @as(u16, board[1][2]);
-    var l3: u16 = @as(u16, board[2][0]) + @as(u16, board[2][1]) + @as(u16, board[2][2]);
-    if (l1 == X or l1 == O) return true;
-    if (l2 == X or l2 == O) return true;
-    if (l3 == X or l3 == O) return true;
-
-    // check columns
-    var c1: u16 = @as(u16, board[0][0]) + @as(u16, board[1][0]) + @as(u16, board[2][0]);
-    var c2: u16 = @as(u16, board[0][1]) + @as(u16, board[1][1]) + @as(u16, board[2][1]);
-    var c3: u16 = @as(u16, board[0][2]) + @as(u16, board[1][2]) + @as(u16, board[2][2]);
-    if (c1 == X or c1 == O) return true;
-    if (c2 == X or c2 == O) return true;
-    if (c3 == X or c3 == O) return true;
-
-    // check diagonales
-    var d1: u16 = @as(u16, board[0][0]) + @as(u16, board[1][1]) + @as(u16, board[2][2]);
-    var d2: u16 = @as(u16, board[0][2]) + @as(u16, board[1][1]) + @as(u16, board[2][0]);
-    if (d1 == X or d1 == O) return true;
-    if (d2 == X or d2 == O) return true;
-
-    return false;
-}
-
-/// ask user to choose a case
-pub fn getInput(player: u8) !u8 {
-    var input: u8 = 0;
-
-    // when leaving
-    defer flush();
-    errdefer print("Not a right input :)\n", .{});
-
-    // prompt user
-    print("player {c}: ", .{player});
-
-    // get input
-    input = try std.io.getStdIn().reader().readByte();
-
-    // not 0 plz (out of bound)
-    if (input == '0') return error.NotZeroPlz;
-
-    // translate char to the actual number
-    input = try std.fmt.charToDigit(input, 10);
-
-    return input;
-}
-
-/// check if case already used
-pub fn check(num: u8, board: [3][3]u8) ![2]u8 {
-    errdefer print("case already used..\n", .{});
-
-    // translate board number into (x,y)
-    var i: u8 = (num - 1) / 3;
-    var j: u8 = (num - 1) % 3;
-    var case: u8 = board[i][j];
-
-    if (case == 'X' or case == 'O') return error.AlreadyUsed;
-
-    return [2]u8{ i, j };
-}
-
-/// round for a player
-pub fn play(player: u8, board: *[3][3]u8) void {
-    var input: u8 = 0;
-    var coord: [2]u8 = undefined;
-
-    // get the input
+// play a round, loop until the user chooses a valid case
+fn play(board: *[9]u8, current_player: u8) void {
     while (true) {
-        input = getInput(player) catch continue;
-        coord = check(input, board.*) catch continue;
+        print("Player '{c}': ", .{current_player});
+        const choice = readUInt() catch {
+            print("Please enter a valid number between 1-9\n", .{});
+            continue;
+        };
+
+        if (choice == 0 or choice > 9) {
+            print("Please enter a number between 1-9\n", .{});
+            continue;
+        }
+
+        if (board[choice - 1] != std.fmt.digitToChar(choice, .lower)) {
+            print("This case is already played, try another one\n", .{});
+            continue;
+        }
+
+        board[choice - 1] = current_player;
         break;
     }
-
-    // put the player on the board
-    board[coord[0]][coord[1]] = player;
-    return;
-}
-
-/// flush stdin
-pub fn flush() void {
-    const reader = std.io.getStdIn().reader();
-    while ((reader.readByte() catch return) != '\n') {}
 }
 
 pub fn main() void {
-    // init the board
-    var board = [3][3]u8{
-        .{ '1', '2', '3' },
-        .{ '4', '5', '6' },
-        .{ '7', '8', '9' },
+    const players = [2]u8{ 'X', 'O' };
+    var board = [9]u8{
+        '1', '2', '3',
+        '4', '5', '6',
+        '7', '8', '9',
     };
-
-    // init players
-    var players = [2]u8{ 'X', 'O' };
-
-    // init allocator
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    // main loop
     var round: u8 = 0;
-    var winner: bool = false;
-    while (winner == false) : (round += 1) {
-        clear(allocator);
-        show(board);
-        play(players[round % 2], &board);
-        winner = check_winner(board);
-        if (round == 8 and winner == false) break;
-    }
 
-    // show winner if any
-    clear(allocator);
-    show(board);
-    if (winner) {
-        print("Player {c} WIN !!!\n", .{players[(round - 1) % 2]});
-    } else {
-        print("No Winner...\n", .{});
-    }
+    while (round < 9) : (round += 1) {
+        const current_player = players[round % 2];
+        draw(board);
+        play(&board, current_player);
+        if (winner(board)) {
+            draw(board);
+            print("Congrats to '{c}' !\n", .{current_player});
+            break;
+        }
+    } else print("No one win..\n", .{});
 }
