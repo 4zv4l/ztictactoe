@@ -5,12 +5,14 @@ const print = std.debug.print;
 fn readUInt() !u8 {
     var stdin = std.io.getStdIn().reader();
     var buff: [5]u8 = undefined;
-    const len = try stdin.read(&buff);
-    if (len == buff.len and buff[len - 1] != '\n') {
-        while (try stdin.readByte() != '\n') {}
-        return error.InputTooLong;
-    }
-    return try std.fmt.parseUnsigned(u8, buff[0 .. len - 1], 10);
+    const input = stdin.readUntilDelimiterOrEof(&buff, '\n') catch |err| {
+        if (err == error.StreamTooLong) while (try stdin.readByte() != '\n') {};
+        return err;
+    } orelse {
+        print("\rerror: End of Input reached\n", .{});
+        std.process.exit(1);
+    };
+    return try std.fmt.parseUnsigned(u8, input, 10);
 }
 
 // check if there is a winner horizontally, vertically or diagonally
@@ -25,7 +27,7 @@ fn winner(board: [9]u8) bool {
         board[2] == board[4] and board[4] == board[6];
 }
 
-// draw the board and clear the screen using ANSI escape sequence
+// clear the screen using ANSI escape sequence and draw the board
 fn draw(board: [9]u8) void {
     print("\x1bc" ++
         \\+---+---+---+
@@ -70,12 +72,12 @@ fn play(board: *[9]u8, current_player: u8) void {
 
 pub fn main() void {
     const players = [2]u8{ 'X', 'O' };
-    var board = [9]u8{
+    var round: u8 = 0;
+    var board: [9]u8 = .{
         '1', '2', '3',
         '4', '5', '6',
         '7', '8', '9',
     };
-    var round: u8 = 0;
 
     while (round < 9) : (round += 1) {
         const current_player = players[round % 2];
